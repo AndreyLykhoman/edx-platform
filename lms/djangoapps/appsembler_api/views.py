@@ -2,6 +2,7 @@ import json
 import logging
 import string
 import random
+import pytz
 
 import search
 from dateutil import parser
@@ -785,11 +786,11 @@ class GetBatchCompletionDataView(APIView):
         query_filter = {}
 
         if updated_min:
-            min_date = parser.parse(updated_min)
+            min_date = parser.parse(updated_min).replace(tzinfo=pytz.UTC)
             query_filter['created_date__gt'] = min_date
 
         if updated_max:
-            max_date = parser.parse(updated_max)
+            max_date = parser.parse(updated_max).replace(tzinfo=pytz.UTC)
             query_filter['created_date__lt'] = max_date
 
 
