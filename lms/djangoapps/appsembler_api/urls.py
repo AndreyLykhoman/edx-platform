@@ -26,4 +26,5 @@ urlpatterns = patterns(
     # enrollment analytics API
     url(r'^analytics/accounts/batch', views.GetBatchUserDataView.as_view(), name="get_batch_user_data"),
     url(r'^analytics/enrollment/batch', views.GetBatchEnrollmentDataView.as_view(), name="get_batch_enrollment_data"),
+    url(r'^analytics/course_completion/batch', views.GetBatchCompletionDataView.as_view(), name="get_batch_completion_data"),
 )

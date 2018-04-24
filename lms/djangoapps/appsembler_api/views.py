@@ -765,3 +765,51 @@ class GetBatchEnrollmentDataView(APIView):
             enrollment_list.append(enrollment_data)
 
         return Response(enrollment_list, status=200)
+
+class GetBatchCompletionDataView(APIView):
+    authentication_classes = OAuth2AuthenticationAllowInactiveUser,
+    permission_classes = IsStaffOrOwner,
+
+    def get(self, request):
+        """
+        /appsembler_api/v0/analytics/course_completion/batch[?time-parameter]
+
+        time-parameter is an optional query parameter of:
+                ?updated_min=yyyy-mm-ddThh:mm:ss
+                ?updated_max=yyyy-mm-ddThh:mm:ss
+                ?updated_min=yyyy-mm-ddThh:mm:ss&updated_max=yyyy-mm-ddThh:mm:ss
+        """
+        updated_min = request.GET.get('updated_min','')
+        updated_max = request.GET.get('updated_max','')
+
+        query_filter = {}
+
+        if updated_min:
+            min_date = parser.parse(updated_min)
+            query_filter['created_date__gt'] = min_date
+
+        if updated_max:
+            max_date = parser.parse(updated_max)
+            query_filter['created_date__lt'] = max_date
+
+
+        certificates = GeneratedCertificate.objects.filter(**query_filter)
+
+        certificate_list = []
+        for certificate in certificates:
+            course = get_course_by_id(certificate.course_id, depth=0)
+            if not course:
+                course_name = str(certificate.course_id)
+            else:
+                course_name = course.display_name
+
+            certificate_data = {
+                'email': certificate.user.email,
+                'course_name': course_name,
+                'course_id': str(certificate.course_id),
+                'grade': certificate.grade,
+                'completion_date':  str(certificate.created_date)
+            }
+            certificate_list.append(certificate_data)
+
+        return Response(certificate_list, status=200)
