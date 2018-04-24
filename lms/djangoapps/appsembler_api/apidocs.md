@@ -557,3 +557,41 @@ This endpoint provides information about course enrollment. Can be called with f
 	* `/appsembler_api/v0/analytics/enrollment/batch` Get all course enrollments
 	* `/appsembler_api/v0/analytics/enrollment/batch?course_id=course-v1%3Aedx%2BDemoX101%2B2017` Get all course enrollments for edX DemoX Course
 	* `/appsembler_api/v0/analytics/enrollment/batch?course_id=course-v1%3Aedx%2BDemoX101%2B2017&update_min=2016-01-07` Get all course enrollments for Food Safety 101 enrolled after Jan 7th 2016:
+
+### Course Completions
+
+This endpoint provides information about course completions via searching for GeneratedCertificate objects in the database. Can be called with filters for the date the certificate was issued or can be called without parameters to get information for all course completions.
+
+* URL: `/appsembler_api/v0/analytics/course_completion/batch`
+* Method: `GET`
+* Optional URL Params:
+	* `updated_min` (YYYY-MM-DD) Certificate issued start date
+	* `updated_max` (YYYY-MM-DD) Certificate issued end date
+
+* Success Response
+	* Code: 200
+	* Content:
+	```
+	[
+  {
+    "email": "honor@example.com",
+    "course_name": "Open edX Demo Course",
+    "course_id": "course-v1:edX+DemoX+Demo_Course",
+    "grade": "1.0",
+    "completion_date": "2017-01-24 14:32:21+00:00"
+  },
+  {
+    "email": "verified@example.com",
+    "course_name": "Appsembler Test Course",
+    "course_id": "course-v1:test+Appsembler+Test_Course",
+    "grade": "1.0",
+    "completion_date": "2018-11-30 01:32:21+00:00"
+    }
+  },
+  ...
+  ]
+	```
+
+* 	Example calls:
+	* `/appsembler_api/v0/analytics/course_completion/batch` Get all course enrollments
+	* `/appsembler_api/v0/analytics/course_completion/batch?update_min=2016-01-07` Get all course completions after Jan 7th 2016
