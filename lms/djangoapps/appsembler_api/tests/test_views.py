@@ -2,19 +2,30 @@
 Tests for the Appsembler API views.
 """
 
+
+
+import json
+import pytz
+import ddt
+
 from urllib import quote, urlencode
+from datetime import datetime
+from mock import patch
+from rest_framework.permissions import AllowAny
+from rest_framework.test import APIRequestFactory
 
 from django.core.urlresolvers import reverse
-
-from lms.djangoapps.course_api.tests.test_views import CourseApiTestViewMixin
-import json
-from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
-
 from django.test.utils import override_settings
 
+from lms.djangoapps.course_api.tests.test_views import CourseApiTestViewMixin
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from search.tests.tests import TEST_INDEX_NAME
 from search.tests.test_course_discovery import DemoCourse
 from search.tests.utils import SearcherMixin
+
+from student.tests.factories import CourseEnrollmentFactory
+from xmodule.modulestore.tests.factories import CourseFactory
+from certificates.models import GeneratedCertificate
 
 
 # Any class that inherits from TestCase will cause too-many-public-methods pylint error
@@ -117,3 +128,74 @@ class CourseListSearchViewTest(CourseApiTestViewMixin, ModuleStoreTestCase, Sear
         self.assertIn("results", data)
         self.assertNotEqual(data["results"], [])
         self.assertEqual(data["pagination"]["count"], 1)
+
+@ddt.ddt
+@patch('appsembler_api.views.GetBatchCompletionDataView.authentication_classes', [])
+@patch('appsembler_api.views.GetBatchCompletionDataView.permission_classes', [AllowAny])
+class GetBatchCompletionDataViewTest(CourseApiTestViewMixin, ModuleStoreTestCase):
+    """
+    Tests for the endpoint: /analytics/course_completion/batch
+    """
+    def setUp(self):
+        super(GetBatchCompletionDataViewTest, self).setUp()
+        
+        self.course1 = CourseFactory()
+        self.course2 = CourseFactory()
+
+        test_time = datetime(year=1999, month=1, day=1, minute=0, second=0, tzinfo=pytz.UTC)
+
+        #enrollment dates at years 2000, 2010, 2020
+        self.enrollments = [
+            CourseEnrollmentFactory(course_id=self.course1.id),
+            CourseEnrollmentFactory(course_id=self.course1.id),
+            CourseEnrollmentFactory(course_id=self.course1.id),
+            CourseEnrollmentFactory(course_id=self.course2.id),
+        ]
+
+        # enrollment dates need to be updated after CourseEnrollments are saved to db
+        updated_enrollment_years = [2000, 2010, 2020, 2020]
+        for index, enrollment in enumerate(self.enrollments):
+            enrollment.created = test_time.replace(year=updated_enrollment_years[index])
+            enrollment.save()
+
+        for ce in self.enrollments: 
+            GeneratedCertificate(
+                            course_id=ce.course_id, 
+                            user=ce.user, 
+                        ).save()
+                                
+        self.certificates = list(GeneratedCertificate.objects.all())
+        # certificate issue dates at years 2005, 2015, 2025 (five years after each enrollment)
+        #   likewise, these values need to be updated after GeneratedCertificates are saved to db
+        for enrollment, certificate in zip(self.enrollments, self.certificates):
+            certificate.created_date = enrollment.created.replace(enrollment.created.year + 5)
+            certificate.save()
+
+        self.url = reverse('get_batch_completion_data')
+    
+    def test_analytics_enrollment_endpoint_alone(self):
+
+        res = self.client.get(self.url) # + '?{}'.format(query_string))
+
+        self.assertIn('completion_date', res.content)
+        self.assertEqual(res.status_code, 200)
+
+        data = res.data
+        self.assertEqual(len(data), len(self.certificates))
+
+    @ddt.unpack
+    @ddt.data(  {'query_string': 'updated_min=2030-01-01T00:00:00', 'num_certificates': 0}, 
+                {'query_string': 'updated_min=2010-01-01T00:00:00', 'num_certificates': 3}, 
+                {'query_string': 'updated_max=2010-01-01T00:00:00', 'num_certificates': 1}, 
+                {'query_string': 'updated_min=2010-01-01T00:00:00&updated_max=2020-01-01T00:00:00', 'num_certificates': 1},) 
+    def test_analytics_enrollment_endpoint_with_query_strings(self, query_string, num_certificates):
+
+
+        res = self.client.get(self.url + '?{}'.format(query_string))
+
+        if num_certificates > 0:
+            self.assertIn('completion_date', res.content)
+        self.assertEqual(res.status_code, 200)
+
+        data = res.data
+        self.assertEqual(len(data), num_certificates)
